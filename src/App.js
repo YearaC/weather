@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { Button, Modal } from "react-bootstrap";
 import "./App.css";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import WeatherBox from "./component/WeatherBox";
@@ -7,7 +6,8 @@ import WeatherButton from "./component/WeatherButton";
 
 function App() {
   const [weather, setWeather] = useState(null);
-  const [showPermissionModal, setShowPermissionModal] = useState(true);
+  const [selectedLocation, setSelectedLocation] = useState('current');
+  const [permissionRequested, setPermissionRequested] = useState(false);
 
   const fetchWeather = useCallback(async (lat, lon) => {
     try {
@@ -22,77 +22,65 @@ function App() {
   }, []);
 
   const getCurrentLocation = useCallback(() => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        fetchWeather(latitude, longitude);
-      },
-      (error) => {
-        console.error('Error getting location:', error);
-      }
-    );
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          fetchWeather(latitude, longitude);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+        }
+      );
+    } else {
+      console.error('Geolocation is not supported by this browser.');
+    }
   }, [fetchWeather]);
 
-  const handleAllowThisTime = useCallback(() => {
-    setShowPermissionModal(false);
+  const handleAllow = useCallback(() => {
+    setPermissionRequested(true);
     getCurrentLocation();
   }, [getCurrentLocation]);
-
-  const handleAllowEveryVisit = useCallback(() => {
-    setShowPermissionModal(false);
-    localStorage.setItem("locationPermission", "granted");
-    getCurrentLocation();
-  }, [getCurrentLocation]);
-
-  const handleDontAllow = useCallback(() => {
-    setShowPermissionModal(false);
-  }, []);
-
-  const getWeatherForLocation = useCallback(async (location) => {
-    if (location === 'current') {
-      getCurrentLocation();
-    } else {
-      const locations = {
-        'Paris': { lat: 48.8566, lon: 2.3522 },
-        'Jeju': { lat: 33.5098, lon: 126.5247 }
-      };
-      const { lat, lon } = locations[location];
-      fetchWeather(lat, lon);
-    }
-  }, [getCurrentLocation, fetchWeather]);
 
   useEffect(() => {
     const savedPermission = localStorage.getItem("locationPermission");
     if (savedPermission === "granted") {
       getCurrentLocation();
-      setShowPermissionModal(false);
+    } else if (!permissionRequested) {
+      handleAllow(); // Automatically request permission if not yet requested
     }
-  }, [getCurrentLocation]);
+  }, [getCurrentLocation, handleAllow, permissionRequested]);
+
+  const getWeatherForLocation = useCallback(async (location) => {
+    setSelectedLocation(location);
+
+    try {
+      let locations = {
+        'Paris': { lat: 48.8566, lon: 2.3522 },
+        'Jeju': { lat: 33.5098, lon: 126.5247 }
+      };
+
+      if (location === 'current') {
+        await getCurrentLocation();
+      } else if (locations[location]) {
+        let { lat, lon } = locations[location];
+        await fetchWeather(lat, lon);
+      }
+    } catch (error) {
+      console.error('Error getting weather for location:', error);
+    }
+  }, [getCurrentLocation, fetchWeather]);
 
   return (
     <div>
-      <Modal show={showPermissionModal} onHide={() => setShowPermissionModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>Location Permission</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          This website would like to access your location to provide weather updates.
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleDontAllow}>
-            Don't Allow
-          </Button>
-          <Button variant="primary" onClick={handleAllowThisTime}>
-            Allow this time
-          </Button>
-          <Button variant="primary" onClick={handleAllowEveryVisit}>
-            Allow on every visit
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      <WeatherBox weather={weather} />
-      <WeatherButton onGetWeather={getWeatherForLocation} selectedLocation={null} />
+      {/* Optionally, add a UI element to instruct users to allow location access */}
+      <div className="container">
+        <WeatherBox weather={weather} />
+        <WeatherButton 
+          onGetWeather={getWeatherForLocation} 
+          selectedLocation={selectedLocation} 
+        />
+      </div>
     </div>
   );
 }
