@@ -8,8 +8,6 @@ import WeatherButton from "./component/WeatherButton";
 function App() {
   const [weather, setWeather] = useState(null);
   const [showPermissionModal, setShowPermissionModal] = useState(true);
-  // `permissionGranted`는 사용되지 않으므로 제거
-  const [selectedLocation, setSelectedLocation] = useState('current');
 
   const fetchWeather = useCallback(async (lat, lon) => {
     try {
@@ -37,19 +35,31 @@ function App() {
 
   const handleAllowThisTime = useCallback(() => {
     setShowPermissionModal(false);
-    getCurrentLocation(); // 이제 getCurrentLocation이 정의된 이후에 사용됩니다.
+    getCurrentLocation();
   }, [getCurrentLocation]);
 
   const handleAllowEveryVisit = useCallback(() => {
     setShowPermissionModal(false);
     localStorage.setItem("locationPermission", "granted");
-    getCurrentLocation(); // 이제 getCurrentLocation이 정의된 이후에 사용됩니다.
+    getCurrentLocation();
   }, [getCurrentLocation]);
 
   const handleDontAllow = useCallback(() => {
     setShowPermissionModal(false);
-    // 위치 정보를 가져오지 않음
   }, []);
+
+  const getWeatherForLocation = useCallback(async (location) => {
+    if (location === 'current') {
+      getCurrentLocation();
+    } else {
+      const locations = {
+        'Paris': { lat: 48.8566, lon: 2.3522 },
+        'Jeju': { lat: 33.5098, lon: 126.5247 }
+      };
+      const { lat, lon } = locations[location];
+      fetchWeather(lat, lon);
+    }
+  }, [getCurrentLocation, fetchWeather]);
 
   useEffect(() => {
     const savedPermission = localStorage.getItem("locationPermission");
@@ -58,26 +68,6 @@ function App() {
       setShowPermissionModal(false);
     }
   }, [getCurrentLocation]);
-
-  const getWeatherForLocation = useCallback(async (location) => {
-    setSelectedLocation(location); // 선택된 위치 업데이트
-
-    try {
-      let locations = {
-        'Paris': { lat: 48.8566, lon: 2.3522 },
-        'Jeju': { lat: 33.5098, lon: 126.5247 }
-      };
-
-      if (location === 'current') {
-        await getCurrentLocation();
-      } else if (locations[location]) {
-        let { lat, lon } = locations[location];
-        await fetchWeather(lat, lon);
-      }
-    } catch (error) {
-      console.error('Error getting weather for location:', error);
-    }
-  }, [getCurrentLocation, fetchWeather]); // 의존성 배열에 getCurrentLocation과 fetchWeather 포함
 
   return (
     <div>
@@ -101,9 +91,8 @@ function App() {
         </Modal.Footer>
       </Modal>
 
-      {/* WeatherBox와 WeatherButton 같은 컴포넌트를 여기에 추가 */}
       <WeatherBox weather={weather} />
-      <WeatherButton onGetWeather={getWeatherForLocation} selectedLocation={selectedLocation} />
+      <WeatherButton onGetWeather={getWeatherForLocation} selectedLocation={null} />
     </div>
   );
 }
