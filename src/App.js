@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
+import { Button, Modal } from "react-bootstrap";
 import "./App.css";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import WeatherBox from "./component/WeatherBox";
@@ -6,6 +7,8 @@ import WeatherButton from "./component/WeatherButton";
 
 function App() {
   const [weather, setWeather] = useState(null);
+  const [showPermissionModal, setShowPermissionModal] = useState(true);
+  // `permissionGranted`는 사용되지 않으므로 제거
   const [selectedLocation, setSelectedLocation] = useState('current');
 
   const fetchWeather = useCallback(async (lat, lon) => {
@@ -20,39 +23,44 @@ function App() {
     }
   }, []);
 
-  const reverseGeocode = useCallback(async (lat, lon) => {
-    try {
-      let url = `https://api.openweathermap.org/data/2.5/geo/1.0/reverse?lat=${lat}&lon=${lon}&appid=9fbf737bf2d4ad02dfd09637c45abe0f`;
-      let response = await fetch(url);
-      if (!response.ok) throw new Error('Network response was not ok');
-      let data = await response.json();
-      console.log("Reverse Geocode Data:", data);
-    } catch (error) {
-      console.error('Failed to fetch reverse geocode data:', error);
-    }
+  const getCurrentLocation = useCallback(() => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        fetchWeather(latitude, longitude);
+      },
+      (error) => {
+        console.error('Error getting location:', error);
+      }
+    );
+  }, [fetchWeather]);
+
+  const handleAllowThisTime = useCallback(() => {
+    setShowPermissionModal(false);
+    getCurrentLocation(); // 이제 getCurrentLocation이 정의된 이후에 사용됩니다.
+  }, [getCurrentLocation]);
+
+  const handleAllowEveryVisit = useCallback(() => {
+    setShowPermissionModal(false);
+    localStorage.setItem("locationPermission", "granted");
+    getCurrentLocation(); // 이제 getCurrentLocation이 정의된 이후에 사용됩니다.
+  }, [getCurrentLocation]);
+
+  const handleDontAllow = useCallback(() => {
+    setShowPermissionModal(false);
+    // 위치 정보를 가져오지 않음
   }, []);
 
-  const getCurrentLocation = useCallback(() => {
-    try {
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        let lat = position.coords.latitude;
-        let lon = position.coords.longitude;
-        try {
-          await fetchWeather(lat, lon);
-          await reverseGeocode(lat, lon);
-        } catch (error) {
-          console.error('Error fetching weather or reverse geocode data:', error);
-        }
-      }, (error) => {
-        console.error('Geolocation error:', error);
-      });
-    } catch (error) {
-      console.error('Geolocation error:', error);
+  useEffect(() => {
+    const savedPermission = localStorage.getItem("locationPermission");
+    if (savedPermission === "granted") {
+      getCurrentLocation();
+      setShowPermissionModal(false);
     }
-  }, [fetchWeather, reverseGeocode]);
+  }, [getCurrentLocation]);
 
   const getWeatherForLocation = useCallback(async (location) => {
-    setSelectedLocation(location); // Update selected location
+    setSelectedLocation(location); // 선택된 위치 업데이트
 
     try {
       let locations = {
@@ -69,25 +77,33 @@ function App() {
     } catch (error) {
       console.error('Error getting weather for location:', error);
     }
-  }, [getCurrentLocation, fetchWeather]);
-
-  useEffect(() => {
-    try {
-      getCurrentLocation();
-    } catch (error) {
-      console.error('Error in useEffect:', error);
-    }
-  }, [getCurrentLocation]);
+  }, [getCurrentLocation, fetchWeather]); // 의존성 배열에 getCurrentLocation과 fetchWeather 포함
 
   return (
     <div>
-      <div className="container">
-        <WeatherBox weather={weather} />
-        <WeatherButton 
-          onGetWeather={getWeatherForLocation} 
-          selectedLocation={selectedLocation} 
-        />
-      </div>
+      <Modal show={showPermissionModal} onHide={() => setShowPermissionModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Location Permission</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          This website would like to access your location to provide weather updates.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleDontAllow}>
+            Don't Allow
+          </Button>
+          <Button variant="primary" onClick={handleAllowThisTime}>
+            Allow this time
+          </Button>
+          <Button variant="primary" onClick={handleAllowEveryVisit}>
+            Allow on every visit
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* WeatherBox와 WeatherButton 같은 컴포넌트를 여기에 추가 */}
+      <WeatherBox weather={weather} />
+      <WeatherButton onGetWeather={getWeatherForLocation} selectedLocation={selectedLocation} />
     </div>
   );
 }
